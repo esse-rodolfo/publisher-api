@@ -43,7 +43,7 @@ export function buildSystemPrompt(params: {
   const { persona, pattern, patterns, topPosts, vocab, accentHex } = params;
   const activePattern = patterns.find(p => p.id === pattern);
   const templateName: TemplateName =
-    params.templateOverride ?? (['D', 'G', 'H'].includes(pattern) ? 'compendium' : 'step');
+    params.templateOverride ?? (['D', 'G', 'H'].includes(pattern) ? 'compendium' : 'tweet');
 
   // Build vocabulary section dynamically based on available keys
   const vocabLines = buildVocabLines(vocab);
@@ -242,22 +242,23 @@ ${topPostsRef}
 
 Template: ${templateName}
 ${
-  templateName === 'step'
-    ? 'Editorial: capa preta + serif gigante + slides creme texto-pesado + CTA accent'
-    : templateName === 'compendium'
-      ? 'Terminal: capa preta com prompt mono $ [marca] solve... + slides aspecto IDE/log + checklist > em mono'
-      : templateName === 'tweet'
-        ? `Tweet: cada slide e um card estilo X/Twitter (avatar + @handle + contador). Texto CURTO e conversacional, 1 ideia por slide. Use <em> pra enfase.
-ORCAMENTO DE TEXTO DO TWEET (obrigatorio — o card ENCOLHE E CORTA com "…" o que passar):
-- hook_capa: 1 frase, max 100 caracteres (vira o texto grande da capa).
-- Slide body: "tag" curto (2-4 palavras) + NO MAXIMO 2 "paragraphs" de ate 100 caracteres cada. NUNCA use "cards" no tweet.
+  templateName === 'compendium'
+    ? 'Terminal: capa preta com prompt mono $ [marca] solve... + slides aspecto IDE/log + checklist > em mono'
+    : templateName === 'tweet'
+      ? `Tweet: cada slide e um card de thread no tema escuro do X (avatar + @handle + contador). Escreva como uma pessoa publicaria: conversacional, concreto e com UMA ideia por slide.
+ORCAMENTO DE TEXTO DO TWEET (obrigatorio — o layout adapta o tamanho, mas copy longa perde impacto):
+- hook_capa: 1 frase completa de 45-95 caracteres. Nao use titulo fragmentado nem repita o label_capa.
+- label_capa: 2-4 palavras que contextualizam o hook sem repeti-lo.
+- Slide body: "tag" de 2-4 palavras como rotulo de contexto + 1 ou 2 "paragraphs" de 55-95 caracteres cada. Cada paragrafo deve ser uma frase completa. NUNCA use "cards" no tweet.
 - "list": maximo 3 itens de ate 45 caracteres cada. "stats": maximo 3 pares, texto de ate 45 caracteres.
-- cta_text: max 110 caracteres. cta_sub: max 40 caracteres.
+- NUNCA escreva marcador no inicio dos itens de "list" (nada de "->", "-", "*", "•"). O template desenha o bullet; marcador no texto vira ASCII duplicado.
+- cta_text: 60-105 caracteres. cta_sub: max 40 caracteres.
+- Use no maximo UMA marcacao <em> por slide. Ela vira negrito na mesma cor — nunca escreva a frase inteira em <em>.
 IMAGEM POR SLIDE (campo OPCIONAL "image_prompt" nos slides body):
 - Inclua "image_prompt" em APENAS 1-2 slides body onde a imagem AGREGA (cena concreta, prova visual do que o texto afirma). NUNCA em todos; se nenhum se beneficia, nao inclua em nenhum.
 - Valor: descricao visual concreta EM INGLES, ate 200 caracteres — cena fotografica realista ou ilustracao editorial relacionada ao conteudo daquele slide (ex: "overhead photo of an accountant's desk with tax documents and a laptop, warm morning light").
 - PROIBIDO dentro da imagem: texto, letras, numeros, logos, marcas, marcas d'agua, telas com texto legivel.`
-        : 'Custom: conteudo de carrossel padrao (headline, paragrafos curtos, bullets, CTA). O layout visual e definido pelo template do usuario — foque em texto claro e direto que caiba em poucos slots.'
+      : 'Custom: conteudo de carrossel padrao (headline, paragrafos curtos, bullets, CTA). O layout visual e definido pelo template do usuario — foque em texto claro e direto que caiba em poucos slots.'
 }
 Accent hex: ${accentHex}
 Base fixa: cream #F5F2EE, ink #141413, line #DAD3C7

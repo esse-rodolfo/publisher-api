@@ -1,4 +1,14 @@
-import { Controller, Delete, Post, Param, ParseIntPipe, Body } from '@nestjs/common';
+import {
+  Controller,
+  Delete,
+  Post,
+  Param,
+  ParseIntPipe,
+  Body,
+  UploadedFile,
+  UseInterceptors,
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { GenerationService } from './generation.service';
 import { SlideImageService } from './slide-image.service';
 import { GenerateDto } from './dto/generate.dto';
@@ -51,6 +61,28 @@ export class GenerationController {
     @Body() dto: GenerateSlideImageDto,
   ) {
     return this.slideImageService.generateForSlide(contentId, position, user.tenantId, dto.prompt);
+  }
+
+  /** Escolhe do acervo (banco de imagens) para este slide — pode devolver null. */
+  @Post(':contentId/slides/:position/image/bank')
+  async pickBankImage(
+    @CurrentUser() user: { userId: string; tenantId: string },
+    @Param('contentId') contentId: string,
+    @Param('position', ParseIntPipe) position: number,
+  ) {
+    return this.generationService.pickBankForSlide(contentId, position, user.tenantId);
+  }
+
+  /** Upload manual de imagem-fonte para este slide (campo `file`). */
+  @Post(':contentId/slides/:position/image/upload')
+  @UseInterceptors(FileInterceptor('file'))
+  async uploadSlideSourceImage(
+    @CurrentUser() user: { userId: string; tenantId: string },
+    @Param('contentId') contentId: string,
+    @Param('position', ParseIntPipe) position: number,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    return this.slideImageService.uploadForSlide(contentId, position, user.tenantId, file);
   }
 
   @Delete(':contentId/slides/:position/image')

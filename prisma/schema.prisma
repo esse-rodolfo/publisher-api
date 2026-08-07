@@ -62,8 +62,65 @@ model Tenant {
   brandKits      BrandKit[]
   templates      Template[]
   personas       Persona[]
+  mediaAssets    MediaAsset[]
 
   @@map("tenants")
+}
+
+// Acervo de imagens por tenant (banco de imagens com busca semântica).
+// TRÊS conceitos de imagem coexistem no sistema — não confundir:
+//   Slide.imageUrl/imageKey  = PNG exportado do slide inteiro (estúdio)
+//   bodyData.image           = imagem-fonte DENTRO do slide (SlideImage)
+//   MediaAsset               = foto do acervo, reutilizável entre posts
+// O índice é gerado por IA na ingestão (media.processor): Claude descreve a
+// foto, o texto vira embedding e é ELE que responde à busca. `embedding` é
+// Unsupported de propósito — o Prisma cria a coluna mas não a expõe no client;
+// leitura/escrita só via $queryRaw/$executeRaw (operador <=>).
+model MediaAsset {
+  id        String @id @default(uuid())
+  tenantId  String @map("tenant_id")
+
+  // objeto no MinIO (prefixo media/{tenantId}/)
+  key       String
+  url       String
+  mimeType  String @map("mime_type")
+  width     Int?
+  height    Int?
+  sizeBytes Int    @map("size_bytes")
+  // sha256 do binário — re-upload do mesmo arquivo devolve o asset existente
+  checksum  String
+
+  // índice gerado por IA (ver MEDIA_INDEX_SCHEMA em media-index.service)
+  description String?  @db.Text
+  subjects    String[]
+  themes      String[]
+  setting     String?
+  people      String?
+  mood        String?
+  colors      String[]
+  usableAs    String[] @map("usable_as")
+  hasText     Boolean  @default(false) @map("has_text")
+  qualityFlag String?  @map("quality_flag")
+
+  embedding Unsupported("vector(1536)")?
+
+  indexStatus String    @default("PENDING") @map("index_status") // PENDING | INDEXING | READY | FAILED
+  indexError  String?   @map("index_error")
+  indexedAt   DateTime? @map("indexed_at")
+
+  // uso — desempate na escolha e futura análise de acervo
+  timesUsed  Int       @default(0) @map("times_used")
+  lastUsedAt DateTime? @map("last_used_at")
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, checksum])
+  @@index([tenantId, indexStatus])
+  @@map("media_assets")
 }
 
 // Personas por tenant — o público-alvo do conteúdo. As 6 personas do nicho
@@ -210,6 +267,8 @@ model Content {
   brandKitVersion Int?    @map("brand_kit_version")
   // estilo aplicado ao post (snapshot completo: typography/palette/template)
   styleData       Json?   @map("style_data")
+  // política de imagem escolhida no wizard: ai | bank | upload | none
+  imagePolicy     String? @map("image_policy")
   createdAt   DateTime      @default(now()) @map("created_at")
   updatedAt   DateTime      @updatedAt @map("updated_at")
   deletedAt   DateTime?     @map("deleted_at")

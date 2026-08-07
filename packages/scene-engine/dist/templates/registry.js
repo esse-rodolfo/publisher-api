@@ -6,9 +6,10 @@ export function getTemplate(family) {
     const p = registry.get(family);
     if (p)
         return p;
-    // fallback p/ step (compendium chega no Sprint 3)
-    const step = registry.get('step');
-    if (!step)
+    // fallback p/ tweet, o carrossel padrão do sistema ('step'/Editorial foi
+    // retirado: segue registrado, mas só p/ renderizar conteúdo antigo).
+    const fallback = registry.get('tweet');
+    if (!fallback)
         throw new Error(`Nenhum template registrado para "${family}"`);
-    return step;
+    return fallback;
 }

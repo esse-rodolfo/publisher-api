@@ -106,7 +106,7 @@ export class BrandKitService {
         tenantId,
         isDefault: false,
         name: patch.name ?? 'Meu estilo',
-        template: patch.template ?? 'step',
+        template: patch.template ?? 'tweet',
         typography: (patch.typography ?? SEED_TYPOGRAPHY) as any,
         palette: (patch.palette ?? SEED_PALETTE) as any,
         brand: (patch.brand ?? SEED_BRAND) as any,

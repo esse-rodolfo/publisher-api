@@ -33,8 +33,10 @@ export interface SlideInput {
 export interface SlideImageInput {
   enabled: boolean;
   role: 'figure' | 'background';
-  prompt: string;
-  model: 'nano-banana' | 'gpt-5.5-image';
+  source?: 'ai' | 'bank' | 'upload';
+  asset_id?: string;
+  prompt?: string;
+  model?: 'nano-banana' | 'gpt-5.5-image';
   seed?: number;
   focal?: { x: number; y: number };
   treatment?: 'duotone' | 'grain' | 'none';

@@ -52,6 +52,8 @@ export interface GenerationInput {
   template?: TemplateName;
   /** snapshot de estilo (tipografia/paleta) do template escolhido — ex.: Twitter dark. */
   styleData?: Record<string, unknown>;
+  /** política de imagem dos slides (wizard): ai | bank | upload | none. */
+  imagePolicy?: 'ai' | 'bank' | 'upload' | 'none';
 }
 
 /**
@@ -61,8 +63,13 @@ export interface GenerationInput {
 export interface SlideImageRaw {
   enabled: boolean;
   role: 'figure' | 'background';
-  prompt: string;
-  model: 'nano-banana' | 'gpt-5.5-image';
+  /** origem: gerada por IA, escolhida do acervo ou upload manual do usuário. */
+  source?: 'ai' | 'bank' | 'upload';
+  /** id do MediaAsset quando source='bank'. */
+  asset_id?: string;
+  /** prompt/model só existem quando source='ai'. */
+  prompt?: string;
+  model?: 'nano-banana' | 'gpt-5.5-image';
   seed?: number;
   focal?: { x: number; y: number };
   treatment?: 'duotone' | 'grain' | 'none';

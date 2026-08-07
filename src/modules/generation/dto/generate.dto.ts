@@ -15,11 +15,22 @@ export class GenerateDto {
 
   /** família visual escolhida no wizard; ausente = automático (pelo pattern). */
   @IsOptional()
-  @IsIn(['step', 'compendium', 'tweet', 'custom'])
+  @IsIn(['compendium', 'tweet', 'custom'])
   template?: TemplateName;
 
   /** snapshot de estilo do template escolhido (tipografia/paleta) — ex.: Twitter dark. */
   @IsOptional()
   @IsObject()
   styleData?: Record<string, unknown>;
+
+  /**
+   * Política de imagem dos slides (escolhida no wizard):
+   * - 'ai': gera por IA nos slides com image_prompt (comportamento atual)
+   * - 'bank': escolhe do acervo do tenant (banco de imagens) nos mesmos slides
+   * - 'upload': usuário sobe manualmente no studio — nenhuma ação automática
+   * - 'none' / ausente: sem imagem automática (default atual)
+   */
+  @IsOptional()
+  @IsIn(['ai', 'bank', 'upload', 'none'])
+  imagePolicy?: 'ai' | 'bank' | 'upload' | 'none';
 }

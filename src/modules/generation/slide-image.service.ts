@@ -73,6 +73,7 @@ export class SlideImageService {
         treatment: slide.image?.treatment,
         enabled: true,
         role: 'figure',
+        source: 'ai',
         prompt,
         model: provider.model,
         status: 'ready',
@@ -90,6 +91,7 @@ export class SlideImageService {
       const failed: SlideImageRaw = {
         enabled: true,
         role: 'figure',
+        source: 'ai',
         prompt,
         model: provider.model,
         status: 'failed',
@@ -104,6 +106,63 @@ export class SlideImageService {
         `Não foi possível gerar a imagem do slide ${position}. Tente novamente.`,
       );
     }
+  }
+
+  /**
+   * Grava uma imagem EXTERNA num slide (acervo ou upload manual) usando a
+   * mesma dupla-escrita da geração. Preserva seed/focal/treatment anteriores.
+   */
+  async applyImage(
+    contentId: string,
+    position: number,
+    tenantId: string,
+    image: Omit<SlideImageRaw, 'seed' | 'focal' | 'treatment'>,
+  ): Promise<SlideImage> {
+    const { raw, bodyIdx } = await this.loadBodySlide(contentId, position, tenantId);
+    const slide = raw.slides[bodyIdx];
+    const full: SlideImageRaw = {
+      seed: slide.image?.seed,
+      focal: slide.image?.focal,
+      treatment: slide.image?.treatment,
+      ...image,
+    };
+    await this.writeSlideImage(contentId, position, raw, bodyIdx, full);
+    this.logger.log(`Imagem ${full.source} aplicada ao slide ${position} (content ${contentId})`);
+    return this.toSceneImage(full);
+  }
+
+  /** Upload manual de imagem-fonte para um slide (3ª opção da política). */
+  async uploadForSlide(
+    contentId: string,
+    position: number,
+    tenantId: string,
+    file: Express.Multer.File,
+  ): Promise<SlideImage> {
+    if (!file) throw new BadRequestException('Arquivo "file" ausente');
+    const accepted = new Set(['image/jpeg', 'image/png', 'image/webp']);
+    if (!accepted.has(file.mimetype)) {
+      throw new BadRequestException(`Tipo ${file.mimetype} não aceito (jpeg, png ou webp)`);
+    }
+    if (file.size > 15 * 1024 * 1024) {
+      throw new BadRequestException('Imagem excede o limite de 15MB');
+    }
+
+    const ext = file.mimetype === 'image/png' ? 'png' : file.mimetype === 'image/webp' ? 'webp' : 'jpg';
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    const key = `${contentId}/slides/${position}/upload-${stamp}.${ext}`;
+    await this.minio.putBuffer(key, file.buffer, file.mimetype);
+
+    const { width, height } = this.pngSize(file.buffer);
+    return this.applyImage(contentId, position, tenantId, {
+      enabled: true,
+      role: 'figure',
+      source: 'upload',
+      status: 'ready',
+      asset_url: this.minio.publicUrl(key),
+      asset_key: key,
+      width,
+      height,
+    });
   }
 
   /** Remove a imagem do slide (limpa `slide.image` na dupla-escrita). */
@@ -247,6 +306,8 @@ export class SlideImageService {
     return {
       enabled: i.enabled,
       role: i.role,
+      source: i.source,
+      assetId: i.asset_id,
       prompt: i.prompt,
       model: i.model,
       seed: i.seed,

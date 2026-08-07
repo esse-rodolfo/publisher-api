@@ -74,7 +74,7 @@ async function seedTenantAndUser() {
 // ---------------------------------------------------------------------------
 
 // Legado: o model Template agora guarda só templates CUSTOM do usuário (fase 2).
-// Os templates de sistema (Editorial/Twitter/Terminal) são código no frontend.
+// Os templates de sistema (Twitter/Terminal) são código no frontend.
 // O import de HTML de design/ foi aposentado.
 async function seedTemplates() {
   console.log('[2/7] Templates de sistema são código no frontend — nada a semear.');

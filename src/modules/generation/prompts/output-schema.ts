@@ -34,7 +34,7 @@ export const GenerationOutputSchema = z.object({
   slug: z.string().min(1),
   padrao: z.string().min(1),
   persona: z.string().min(1),
-  template: z.enum(['step', 'compendium', 'tweet']).catch('step'),
+  template: z.enum(['compendium', 'tweet']).catch('tweet'),
   label_topo_capa: z.string().default(''),
   /**
    * 2-4 tags curtas em MAIUSCULAS para a capa (ex.: ["5 PASSOS", "TECNICO"]).

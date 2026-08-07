@@ -22,7 +22,7 @@ export class UpdateBrandKitDto {
   name?: string;
 
   @IsOptional()
-  @IsIn(['step', 'compendium'])
+  @IsIn(['compendium', 'tweet'])
   template?: string;
 }
 

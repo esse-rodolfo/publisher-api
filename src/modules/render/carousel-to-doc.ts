@@ -31,6 +31,8 @@ function mapSlideImage(i: SlideImageInput): SlideImage {
   return {
     enabled: i.enabled,
     role: i.role,
+    source: i.source,
+    assetId: i.asset_id,
     prompt: i.prompt,
     model: i.model,
     seed: i.seed,

@@ -14,6 +14,7 @@ import { buildSystemPrompt } from './prompts/carousel-prompt';
 import { buildThemeIdeasPrompt } from './prompts/theme-ideas-prompt';
 import { selectTemplate } from './prompts/template-selector';
 import { PersonasService } from '../personas/personas.service';
+import { MediaPickService } from '../media/media-pick.service';
 import {
   GenerationOutputSchema,
   SlideOutSchema,
@@ -41,6 +42,16 @@ const DATASET_DIR =
     ? process.env.DATASET_DIR
     : join(process.cwd(), 'datasets');
 
+/**
+ * Remove marcador ASCII escrito pelo modelo no início de um item de lista
+ * ("-> ", "- ", "* ", "• "…). O marcador visual é responsabilidade do template.
+ * Mantido em sincronia com `LIST_PREFIX` em scene-engine/templates/tweet.ts,
+ * que faz a mesma limpeza na renderização de conteúdo já salvo.
+ */
+function stripListPrefix(item: string): string {
+  return item.replace(/^\s*(?:->|=>|--|[-–—*•·▸▪])\s+/, '');
+}
+
 @Injectable()
 export class GenerationService {
   private readonly logger = new Logger(GenerationService.name);
@@ -52,6 +63,7 @@ export class GenerationService {
     private readonly factCheck: FactCheckService,
     private readonly slideImage: SlideImageService,
     private readonly personas: PersonasService,
+    private readonly mediaPick: MediaPickService,
   ) {
     this.anthropic = new Anthropic({
       apiKey: this.config.get<string>('ANTHROPIC_API_KEY'),
@@ -100,6 +112,14 @@ export class GenerationService {
     // escolha explícita do wizard prevalece sobre o que o modelo devolveu
     if (input.template) generated.template = input.template;
 
+    // O modelo insiste em escrever "-> item" dentro do texto da lista. Quem
+    // desenha o marcador é o template; deixar o ASCII no dado salvo faz o
+    // editor in-place do estúdio mostrar "->" enquanto o canvas mostra o
+    // bullet — duas verdades pro mesmo campo. Limpamos na ENTRADA, uma vez.
+    for (const slide of generated.slides) {
+      if (slide.list) slide.list = slide.list.map((i) => stripListPrefix(i));
+    }
+
     const durationMs = Date.now() - startTime;
 
     // Run fact-check
@@ -145,6 +165,7 @@ export class GenerationService {
         caption: generated.caption,
         slidesData: generated as any,
         styleData: (input.styleData as any) ?? undefined,
+        imagePolicy: input.imagePolicy ?? undefined,
         brandKitId: brandKit?.id,
         brandKitVersion: brandKit?.version,
         authorId,
@@ -191,28 +212,110 @@ export class GenerationService {
       include: { slides: true, generations: true },
     });
 
-    // P1: imagens por slide (best-effort, fire-and-forget — não bloqueia a resposta).
-    // Sequencial de propósito: a dupla-escrita faz read-modify-write no slidesData.
-    if (this.slideImage.hasProvider()) {
-      const positions = generated.slides
-        .map((s, i) => (s.image_prompt ? i + 1 : null))
-        .filter((p): p is number => p !== null);
-      if (positions.length) {
-        void (async () => {
-          for (const position of positions) {
-            await this.slideImage
-              .generateForSlide(content.id, position, tenantId)
-              .catch((err) =>
-                this.logger.warn(
-                  `Imagem do slide ${position} falhou (best-effort): ${err?.message ?? err}`,
-                ),
-              );
-          }
-        })();
-      }
+    // Imagens por slide conforme a política do wizard (best-effort, fire-and-
+    // forget — não bloqueia a resposta). Sequencial de propósito: a dupla-
+    // escrita faz read-modify-write no slidesData.
+    //  - 'ai' (e ausente, comportamento histórico): gera nos slides com image_prompt
+    //  - 'bank': escolhe do acervo nos mesmos slides (pick pode devolver null)
+    //  - 'upload'/'none': nenhuma ação automática
+    const policy = input.imagePolicy ?? 'ai';
+    const positions = generated.slides
+      .map((s, i) => (s.image_prompt ? i + 1 : null))
+      .filter((p): p is number => p !== null);
+
+    if (positions.length && policy === 'ai' && this.slideImage.hasProvider()) {
+      void (async () => {
+        for (const position of positions) {
+          await this.slideImage
+            .generateForSlide(content.id, position, tenantId)
+            .catch((err) =>
+              this.logger.warn(
+                `Imagem do slide ${position} falhou (best-effort): ${err?.message ?? err}`,
+              ),
+            );
+        }
+      })();
+    } else if (positions.length && policy === 'bank') {
+      void (async () => {
+        for (const position of positions) {
+          await this.pickFromBank(content.id, position, generated, tenantId).catch((err) =>
+            this.logger.warn(
+              `Acervo p/ slide ${position} falhou (best-effort): ${err?.message ?? err}`,
+            ),
+          );
+        }
+      })();
     }
 
     return content;
+  }
+
+  /**
+   * Pick do acervo acionado pelo STUDIO (botão "Buscar no acervo" num slide
+   * já persistido). Carrega o slidesData e delega ao mesmo fluxo do wizard.
+   * Devolve o SlideImage aplicado ou null (nenhuma foto serve).
+   */
+  async pickBankForSlide(contentId: string, position: number, tenantId: string) {
+    const content = await this.prisma.content.findFirst({
+      where: { id: contentId, tenantId, deletedAt: null },
+    });
+    if (!content) throw new BadRequestException(`Content ${contentId} não encontrado`);
+    const generated = content.slidesData as unknown as GenerationOutput;
+    if (!Array.isArray(generated?.slides) || position < 1 || position > generated.slides.length) {
+      throw new BadRequestException(`Posição ${position} não é um slide de corpo`);
+    }
+    await this.pickFromBank(contentId, position, generated, tenantId);
+    const updated = await this.prisma.content.findFirst({
+      where: { id: contentId, tenantId },
+      select: { slidesData: true },
+    });
+    const raw = updated?.slidesData as unknown as GenerationOutput;
+    return raw?.slides?.[position - 1]?.image ?? null;
+  }
+
+  /**
+   * Política 'bank': escolhe uma foto do acervo para o slide e grava via a
+   * mesma dupla-escrita da geração por IA. Pick devolvendo null é estado
+   * válido (nenhuma foto ilustra bem) — o slide fica sem imagem.
+   */
+  private async pickFromBank(
+    contentId: string,
+    position: number,
+    generated: GenerationOutput,
+    tenantId: string,
+  ): Promise<void> {
+    const slide = generated.slides[position - 1];
+    // query = copy real do slide (o índice do acervo é em português — o
+    // image_prompt do LLM é em inglês e degradaria a similaridade)
+    const slideText = [
+      slide.tag,
+      ...(slide.paragraphs ?? []),
+      ...(slide.list ?? []),
+      ...(slide.stats ?? []).map(([n, t]) => `${n} ${t}`),
+    ]
+      .filter(Boolean)
+      .join('\n');
+
+    const pick = await this.mediaPick.pickForSlide(
+      tenantId,
+      { slideText, theme: generated.hook_capa, persona: generated.persona },
+      true, // escolha aplicada de fato → marca uso
+    );
+    if (!pick) {
+      this.logger.log(`Acervo: nenhuma foto serve pro slide ${position} (ok, fica sem)`);
+      return;
+    }
+
+    await this.slideImage.applyImage(contentId, position, tenantId, {
+      enabled: true,
+      role: 'figure',
+      source: 'bank',
+      asset_id: pick.assetId,
+      status: 'ready',
+      asset_url: pick.url,
+      asset_key: pick.key,
+    });
+    this.logger.log(`Acervo: slide ${position} ← asset ${pick.assetId} (${pick.reason})`);
   }
 
   async suggestThemes(
@@ -324,6 +427,7 @@ export class GenerationService {
     const system = buildRegenerateSlidePrompt({
       persona: content.persona ?? raw.persona ?? 'empresario',
       pattern: content.pattern ?? raw.padrao ?? 'A',
+      // 'step' só como fallback de conteúdo legado (Editorial saiu do sistema).
       template: content.template ?? raw.template ?? 'step',
       position,
       total: raw.slides.length + 2,

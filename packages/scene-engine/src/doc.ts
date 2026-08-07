@@ -47,8 +47,13 @@ export interface LayoutSpec {
 export interface SlideImage {
   enabled: boolean;
   role: 'figure' | 'background';
-  prompt: string;
-  model: 'nano-banana' | 'gpt-5.5-image';
+  /** origem: gerada por IA, escolhida do acervo (banco de imagens) ou upload manual. */
+  source?: 'ai' | 'bank' | 'upload';
+  /** id do MediaAsset quando source='bank' (rastreia uso do acervo). */
+  assetId?: string;
+  /** prompt/model só existem quando source='ai' (geração). */
+  prompt?: string;
+  model?: 'nano-banana' | 'gpt-5.5-image';
   seed?: number;
   focal?: { x: number; y: number };
   treatment?: 'duotone' | 'grain' | 'none';
@@ -87,9 +92,9 @@ export interface ContentText {
   template: TemplateFamily;
   persona?: string;
   labelTopoCapa?: string;
-  /** 2-4 tags curtas MAIÚSCULAS da capa (template step); substituem a copy fixa. */
-  tagsCapa?: string[];
   labelCapa?: string;
+  /** tags curtas da capa (render junta com " · " em MAIÚSCULAS); ausente → linha omitida. */
+  tagsCapa?: string[];
   hookCapa: string;
   slides: SlideText[];
   ctaLabelTopo?: string;
