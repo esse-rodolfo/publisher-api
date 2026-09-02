@@ -54,16 +54,38 @@ Verificados lendo o código, não presumidos:
   faz `CREATE EXTENSION vector`. O Postgres padrão do Coolify não traz. Já
   corrigido no `docker-compose.yml` local (`pgvector/pgvector:pg16`); na VPS
   exige escolher a imagem certa ao criar o banco.
-- **`PUBLIC_BASE_URL` tem de ser HTTPS público de verdade.** Quem baixa o
-  render é o servidor da Meta, não o navegador do usuário
-  (`src/database/minio.client.ts:30`). Com MinIO em rede interna a publicação
-  falha mesmo com tudo o mais certo.
+- **`PUBLIC_BASE_URL` tem de ser HTTPS público de verdade** — quem baixa o
+  render é o servidor da Meta, não o navegador do usuário. Mas **o MinIO não
+  precisa ser público**: com `PUBLIC_BASE_URL` preenchido, a URL entregue à
+  Meta vira `<base>/api/v1/files/...` e quem serve o arquivo é a própria API
+  (`src/database/minio.client.ts:30-33`, rota `GET /api/v1/files/*`). O bucket
+  fica em rede interna. Só o *fallback*, quando a variável está vazia, aponta
+  direto para o MinIO — e é esse caso que quebraria.
+  Ou seja: `PUBLIC_BASE_URL` = a raiz pública da API, nada mais.
 
 ## Ordem sugerida
 
 1. App Meta criado, com o redirect URI já apontando para o domínio definitivo.
-2. DNS: `publisher.esserodolfo.com.br` (web) e `publisher-api.esserodolfo.com.br`
-   (API), com TLS pelo Coolify.
+2. DNS, dois registros, com TLS pelo Coolify:
+
+   | host | serve |
+   |---|---|
+   | `publisher.esserodolfo.com.br` | front Next.js |
+   | `publisher-api.esserodolfo.com.br` | API, OAuth e `/api/v1/files/*` |
+
+   `api.esserodolfo.com.br` já é do omnihub-api, por isso o sufixo. Segue o
+   mesmo padrão de `leads-lorena.esserodolfo.com.br`, que também é o segundo
+   serviço de um projeto.
+
+   Com isso, o redirect URI a cadastrar no app Meta é exatamente:
+
+   ```
+   https://publisher-api.esserodolfo.com.br/api/v1/oauth/instagram/callback
+   ```
+
+   A Meta compara string por string — barra a mais no fim já reprova. E
+   `PUBLIC_BASE_URL` recebe `https://publisher-api.esserodolfo.com.br`, sem
+   barra no fim e sem `/api/v1`, que o código acrescenta.
 3. Postgres com pgvector + Redis + storage no Coolify.
 4. `Dockerfile` do web, ou decisão de mandar o front para a Vercel.
 5. Deploy da API e do worker, migrations aplicando no boot (o `CMD` já faz
