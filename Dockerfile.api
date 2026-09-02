@@ -19,5 +19,10 @@ COPY --from=build /app/dist ./dist
 COPY --from=build /app/prisma ./prisma
 COPY package.json ./
 EXPOSE 3001
-HEALTHCHECK --interval=30s --timeout=5s CMD curl -f http://localhost:3001/api/v1 || exit 1
+# node -e, nao curl: a imagem runtime instala so openssl e ca-certificates, e
+# `curl` nunca esteve la — o healthcheck antigo falhava sempre, marcando o
+# container unhealthy mesmo funcionando. E o alvo era /api/v1, que devolve 404;
+# quem responde 200 e /api/v1/health.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=40s \
+  CMD node -e "fetch('http://127.0.0.1:3001/api/v1/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 CMD ["sh", "-c", "npx prisma migrate deploy && node dist/main.js"]
