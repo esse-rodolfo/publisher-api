@@ -1,10 +1,17 @@
 FROM node:22-bookworm-slim AS base
 RUN apt-get update && apt-get install -y openssl ca-certificates && rm -rf /var/lib/apt/lists/*
-RUN corepack enable && corepack prepare pnpm@latest --activate
+# Versao fixa, nao @latest: o lockfile aqui e lockfileVersion 9.0, e um
+# `pnpm@latest` faz o build mudar sozinho quando o pnpm lanca major. Build
+# reproduzivel vale mais que estar na ultima versao.
+RUN corepack enable && corepack prepare pnpm@10.30.1 --activate
 WORKDIR /app
 
 FROM base AS deps
-COPY package.json pnpm-lock.yaml ./
+# packages/ e pnpm-workspace.yaml entram ANTES do install: @publisher/scene-engine
+# e dependencia `file:./packages/scene-engine`, entao sem a pasta o pnpm morre com
+# ENOENT scandir '/app/packages/scene-engine' e o build inteiro cai.
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY packages ./packages
 RUN pnpm install --frozen-lockfile --ignore-scripts
 
 FROM base AS build
