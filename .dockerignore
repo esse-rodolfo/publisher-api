@@ -1,0 +1,21 @@
+# node_modules do host NUNCA pode entrar na imagem: o stage `deps` instala para
+# Linux, e um COPY . . por cima traz o que foi compilado na máquina de quem
+# builda. No web isso derrubou o build; aqui passou por sorte, e continuaria
+# mandando centenas de MB para o contexto a cada build.
+node_modules
+**/node_modules
+
+# Artefatos refeitos dentro da imagem.
+dist
+**/dist
+
+# Segredo nunca vai para dentro da imagem — as variáveis entram em runtime.
+.env
+.env.*
+
+.git
+.gitignore
+Dockerfile.api
+Dockerfile.worker
+.dockerignore
+npm-debug.log*
