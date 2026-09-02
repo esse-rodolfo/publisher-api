@@ -23,20 +23,6 @@ function parsePersona(filename: string): string | null {
   return null;
 }
 
-function parseEnvFile(filePath: string): Record<string, string> {
-  const result: Record<string, string> = {};
-  const content = fs.readFileSync(filePath, 'utf-8');
-  for (const line of content.split('\n')) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith('#')) continue;
-    const eqIndex = trimmed.indexOf('=');
-    if (eqIndex === -1) continue;
-    const key = trimmed.substring(0, eqIndex).trim();
-    const value = trimmed.substring(eqIndex + 1).trim();
-    result[key] = value;
-  }
-  return result;
-}
 
 // ---------------------------------------------------------------------------
 // 1. Tenant + User
@@ -391,55 +377,6 @@ async function seedDatasets() {
 }
 
 // ---------------------------------------------------------------------------
-// 6. Social Account
-// ---------------------------------------------------------------------------
-
-async function seedSocialAccount(tenantId: string): Promise<string | null> {
-  console.log('[6/7] Importing SocialAccount from jpasv.env ...');
-
-  const envFile = path.join(HOME, '.credentials/clients/jpasv.env');
-  if (!fs.existsSync(envFile)) {
-    console.log('  jpasv.env not found, skipping.');
-    return null;
-  }
-
-  const env = parseEnvFile(envFile);
-  const accountId = env.IG_USER_ID ?? '';
-  const accountName = env.IG_USERNAME ? `@${env.IG_USERNAME}` : '@jp.asv';
-  const accessToken = env.IG_TOKEN ?? '';
-
-  if (!accountId) {
-    console.log('  IG_USER_ID not found in env file, skipping.');
-    return null;
-  }
-
-  // Upsert by platform + accountId (no unique constraint, so find first)
-  let socialAccount = await prisma.socialAccount.findFirst({
-    where: { accountId, platform: 'INSTAGRAM' },
-  });
-
-  if (!socialAccount) {
-    socialAccount = await prisma.socialAccount.create({
-      data: {
-        tenantId,
-        platform: 'INSTAGRAM',
-        accountName,
-        accountId,
-        accessToken,
-        tokenExpiresAt: env.IG_TOKEN_EXPIRES_AT
-          ? new Date(env.IG_TOKEN_EXPIRES_AT)
-          : null,
-      },
-    });
-    console.log(`  Created SocialAccount: ${socialAccount.id} (${accountName})`);
-  } else {
-    console.log(`  SocialAccount already exists: ${socialAccount.id} (${accountName})`);
-  }
-
-  return socialAccount.id;
-}
-
-// ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
 
@@ -448,14 +385,6 @@ async function main() {
 
   // 1. Tenant + User
   const { tenant } = await seedTenantAndUser();
-
-  // 6. Social Account (needed before posted content)
-  let socialAccountId: string | null = null;
-  try {
-    socialAccountId = await seedSocialAccount(tenant.id);
-  } catch (err) {
-    console.error('[6/7] Error importing social account:', err);
-  }
 
   // 2. Templates
   try {
@@ -473,7 +402,7 @@ async function main() {
 
   // 4. Posted content (published)
   try {
-    await seedPostedContent(tenant.id, socialAccountId);
+    await seedPostedContent(tenant.id, null);
   } catch (err) {
     console.error('[4/7] Error importing posted content:', err);
   }
