@@ -46,20 +46,29 @@ async function seedTenantAndUser() {
   console.log('[1/7] Creating default Tenant and User...');
 
   const tenant = await prisma.tenant.upsert({
-    where: { slug: 'bravy' },
+    where: { slug: 'esse-rodolfo' },
     update: {},
-    create: { name: 'Bravy', slug: 'bravy' },
+    create: { name: 'esse.rodolfo', slug: 'esse-rodolfo' },
   });
   console.log(`  Tenant: ${tenant.id} (${tenant.slug})`);
 
-  const hashedPassword = bcrypt.hashSync('admin123456', 12);
+  // Credenciais vêm do .env (fora do git). Fallback só pra não quebrar quem
+  // rodar o seed sem configurar nada.
+  const email = process.env.SEED_ADMIN_EMAIL ?? 'admin@esserodolfo.com.br';
+  const name = process.env.SEED_ADMIN_NAME ?? 'Admin';
+  const hashedPassword = bcrypt.hashSync(
+    process.env.SEED_ADMIN_PASSWORD ?? 'admin123456',
+    12,
+  );
   const user = await prisma.user.upsert({
-    where: { email: 'admin@bravy.com.br' },
-    update: {},
+    where: { email },
+    // update força a senha do .env mesmo em base já semeada — sem isso,
+    // rodar o seed de novo depois de trocar a senha não teria efeito.
+    update: { password: hashedPassword, name },
     create: {
-      email: 'admin@bravy.com.br',
+      email,
       password: hashedPassword,
-      name: 'Admin Bravy',
+      name,
       role: 'OWNER',
       tenantId: tenant.id,
     },
@@ -435,7 +444,7 @@ async function seedSocialAccount(tenantId: string): Promise<string | null> {
 // ---------------------------------------------------------------------------
 
 async function main() {
-  console.log('=== Bravy Maestria Seed ===\n');
+  console.log('=== Publisher Seed ===\n');
 
   // 1. Tenant + User
   const { tenant } = await seedTenantAndUser();

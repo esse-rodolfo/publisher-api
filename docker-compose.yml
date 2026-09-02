@@ -1,8 +1,11 @@
 services:
   postgres:
-    image: postgres:16-alpine
+    # pgvector, nao postgres:16-alpine: a migration 20260806200214_media_assets
+    # faz CREATE EXTENSION vector, que a imagem oficial nao traz. Esta e a
+    # mesma base 16, com a extensao compilada.
+    image: pgvector/pgvector:pg16
     environment:
-      POSTGRES_DB: publicacao_bravy
+      POSTGRES_DB: publicacao_esserodolfo
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     ports:
